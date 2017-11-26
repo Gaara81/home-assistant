@@ -9,10 +9,15 @@ from datetime import timedelta
 
 import homeassistant.util as util
 import homeassistant.util.color as color_util
+from homeassistant.components.switch import SwitchDevice
+from homeassistant.util import convert
 from homeassistant.components.light import (
     Light, ATTR_BRIGHTNESS, ATTR_COLOR_TEMP, ATTR_RGB_COLOR, ATTR_TRANSITION,
     ATTR_XY_COLOR, SUPPORT_BRIGHTNESS, SUPPORT_COLOR_TEMP, SUPPORT_RGB_COLOR,
     SUPPORT_TRANSITION, SUPPORT_XY_COLOR)
+from homeassistant.const import (
+    STATE_OFF, STATE_ON, STATE_STANDBY, STATE_UNKNOWN)
+from homeassistant.loader import get_component
 
 DEPENDENCIES = ['wemo']
 
@@ -24,9 +29,13 @@ _LOGGER = logging.getLogger(__name__)
 SUPPORT_WEMO = (SUPPORT_BRIGHTNESS | SUPPORT_COLOR_TEMP | SUPPORT_RGB_COLOR |
                 SUPPORT_TRANSITION | SUPPORT_XY_COLOR)
 
+WEMO_ON = 1
+WEMO_OFF = 0
+WEMO_STANDBY = 8
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Set up the WeMo bridges and register connected lights."""
+# pylint: disable=unused-argument, too-many-function-args
+def setup_platform(hass, config, add_devices_callback, discovery_info=None):
+    """Set up discovered WeMo switches."""
     import pywemo.discovery as discovery
 
     if discovery_info is not None:
@@ -34,8 +43,10 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         mac = discovery_info['mac_address']
         device = discovery.device_from_description(location, mac)
 
-        if device:
-            setup_bridge(device, add_devices)
+        if device.model_name == 'Dimmer':
+            add_devices_callback([WemoDimmer(device)])
+        else:
+            setup_bridge(device, add_devices_callback)
 
 
 def setup_bridge(bridge, add_devices):
@@ -140,3 +151,89 @@ class WemoLight(Light):
     def update(self):
         """Synchronize state with bridge."""
         self.update_lights(no_throttle=True)
+
+class WemoDimmer(Light):
+    """Representation of a WeMo dimmer"""
+
+    def __init__(self, device):
+        """Initialize the WeMo dimmer."""
+        self.wemo = device
+        self._brightness = None
+        self._state = None
+        # look up model name once as it incurs network traffic
+        self._model_name = self.wemo.model_name
+
+        wemo = get_component('wemo')
+        wemo.SUBSCRIPTION_REGISTRY.register(self.wemo)
+        wemo.SUBSCRIPTION_REGISTRY.on(self.wemo, None, self._update_callback)
+
+    def _update_callback(self, _device, _type, _params):
+        """Update the state by the Wemo device."""
+        _LOGGER.info("Subscription update for  %s", _device)
+        updated = self.wemo.subscription_update(_type, _params)
+        self._update(force_update=(not updated))
+
+        if not hasattr(self, 'hass'):
+            return
+        self.schedule_update_ha_state()
+
+    @property
+    def unique_id(self):
+        """Return the ID of this WeMo dimmer."""
+        return "{}.{}".format(self.__class__, self.wemo.serialnumber)
+
+    @property
+    def name(self):
+        """Return the name of the dimmer if any."""
+        return self.wemo.name
+
+    @property
+    def supported_features(self):
+        """Flag supported features."""
+        return SUPPORT_BRIGHTNESS
+
+    @property
+    def brightness(self):
+        """Return the brightness of this light between 1 and 100"""
+        wemobrightness = int(self.wemo.get_brightness())
+        return int((wemobrightness * 255) / 100)
+
+    @property
+    def is_on(self):
+        """Return true if dimmer is on. Standby is on."""
+        return self._state
+
+    def update(self):
+        """Update WeMo state."""
+        self._update(force_update=True)
+
+    def _update(self, force_update=True):
+        """Update the device state."""
+        try:
+            self._state = self.wemo.get_state(force_update)
+            wemobrightness = int(self.wemo.get_brightness(force_update))
+            self._brightness = int((wemobrightness * 255) / 100)
+        except AttributeError as err:
+            _LOGGER.warning("Could not update status for %s (%s)",
+                            self.name, err)
+
+    def turn_on(self, **kwargs):
+        """Turn the dimmer on."""
+        self._state = WEMO_ON
+        self.wemo.on()
+        transitiontime = int(kwargs.get(ATTR_TRANSITION, 0))
+
+        # Wemo dimmer switches use a range of [0, 99] to control
+        # brightness. Level 255 might mean to set it to previous value
+        if ATTR_BRIGHTNESS in kwargs:
+            self._brightness = kwargs[ATTR_BRIGHTNESS]
+            brightness = int((self._brightness / 255) * 99)
+        else:
+            brightness = 255
+        self.wemo.set_brightness(brightness)
+
+    def turn_off(self, **kwargs):
+        """Turn the dimmer off."""
+        self._state = WEMO_OFF
+        self.wemo.off()
+        self.schedule_update_ha_state()
