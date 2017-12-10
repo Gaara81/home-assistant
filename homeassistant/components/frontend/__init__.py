@@ -23,7 +23,7 @@ from homeassistant.const import CONF_NAME, EVENT_THEMES_UPDATED
 from homeassistant.core import callback
 from homeassistant.loader import bind_hass
 
-REQUIREMENTS = ['home-assistant-frontend==20171130.0', 'user-agents==1.1.0']
+REQUIREMENTS = ['home-assistant-frontend==20171204.0', 'user-agents==1.1.0']
 
 DOMAIN = 'frontend'
 DEPENDENCIES = ['api', 'websocket_api', 'http', 'system_log']
@@ -583,9 +583,9 @@ def _is_latest(js_option, request):
 
     family_min_version = {
         'Chrome': 50,   # Probably can reduce this
-        'Firefox': 41,  # Destructuring added in 41
+        'Firefox': 43,  # Array.protopype.includes added in 43
         'Opera': 40,    # Probably can reduce this
-        'Edge': 14,     # Maybe can reduce this
+        'Edge': 14,     # Array.protopype.includes added in 14
         'Safari': 10,   # many features not supported by 9
     }
     version = family_min_version.get(useragent.browser.family)
