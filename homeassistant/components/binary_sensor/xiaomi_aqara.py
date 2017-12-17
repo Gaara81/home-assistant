@@ -1,5 +1,6 @@
 """Support for Xiaomi aqara binary sensors."""
 import logging
+from datetime import timedelta
 
 from homeassistant.components.binary_sensor import BinarySensorDevice
 from homeassistant.components.xiaomi_aqara import (PY_XIAOMI_GATEWAY,
@@ -18,6 +19,7 @@ ATTR_NO_MOTION_SINCE = 'No motion since'
 DENSITY = 'density'
 ATTR_DENSITY = 'Density'
 
+SCAN_INTERVAL = timedelta(seconds=10)
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
     """Perform the setup for Xiaomi devices."""
