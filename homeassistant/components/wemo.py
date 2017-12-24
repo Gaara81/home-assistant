@@ -4,7 +4,7 @@ Support for WeMo device discovery.
 For more details about this component, please refer to the documentation at
 https://home-assistant.io/components/wemo/
 """
-import logging
+import logging, requests
 
 import voluptuous as vol
 
@@ -87,7 +87,7 @@ def setup(hass, config):
                    for address in config.get(DOMAIN, {}).get(CONF_STATIC, []))
 
     for address, device in devices:
-        port = pywemo.ouimeaux_device.probe_wemo(address)
+        port = probe_wemo(address)
         if not port:
             _LOGGER.warning('Unable to probe wemo at %s', address)
             continue
@@ -106,3 +106,37 @@ def setup(hass, config):
 
         discovery.discover(hass, SERVICE_WEMO, discovery_info)
     return True
+
+PROBE_PORTS = (49153, 49152, 49154, 49151, 49155)
+
+def probe_wemo(host):
+    """Probe a host for the current port.
+
+    This probes a host for known-to-be-possible ports and
+    returns the one currently in use. If no port is discovered
+    then it returns None.
+    """
+    for port in PROBE_PORTS:
+        try:
+            r = requests.get('http://%s:%i/setup.xml' % (host, port),
+                             timeout=10)
+            if ('WeMo' in r.text) or ('Belkin' in r.text):
+                return port
+        except requests.exceptions.ConnectTimeout:
+            # If we timed out connecting, then the wemo is gone,
+            # no point in trying further.
+            _LOGGER.debug('Timed out connecting to %s on port %i, '
+                      'wemo is offline', host, port)
+            break
+        except requests.exceptions.Timeout:
+            # Apparently sometimes wemos get into a wedged state where
+            # they still accept connections on an old port, but do not
+            # respond. If that happens, we should keep searching.
+            _LOGGER.debug('No response from %s on port %i, continuing',
+                      host, port)
+            continue
+        except requests.exceptions.ConnectionError:
+            pass
+        except:
+            pass
+    return None
