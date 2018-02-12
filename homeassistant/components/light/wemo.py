@@ -211,20 +211,31 @@ class WemoDimmer(Light):
         except AttributeError as err:
             _LOGGER.warning("Could not update status for %s (%s)",
                             self.name, err)
+            self.wemo.reconnect_with_device()
 
     def turn_on(self, **kwargs):
         """Turn the dimmer on."""
-        self.wemo.on()
+        try:
+            self.wemo.on()
 
-        # Wemo dimmer switches use a range of [0, 100] to control
-        # brightness. Level 255 might mean to set it to previous value
-        if ATTR_BRIGHTNESS in kwargs:
-            brightness = kwargs[ATTR_BRIGHTNESS]
-            brightness = int((brightness / 255) * 100)
-        else:
-            brightness = 255
-        self.wemo.set_brightness(brightness)
+            # Wemo dimmer switches use a range of [0, 100] to control
+            # brightness. Level 255 might mean to set it to previous value
+            if ATTR_BRIGHTNESS in kwargs:
+                brightness = kwargs[ATTR_BRIGHTNESS]
+                brightness = int((brightness / 255) * 100)
+            else:
+                brightness = 255
+            self.wemo.set_brightness(brightness)
+        except AttributeError as err:
+            _LOGGER.warning("Could not turn on %s (%s)",
+                            self.name, err)
+            self.wemo.reconnect_with_device()
 
     def turn_off(self, **kwargs):
         """Turn the dimmer off."""
-        self.wemo.off()
+        try:
+            self.wemo.off()
+        except AttributeError as err:
+            _LOGGER.warning("Could not turn off %s (%s)",
+                            self.name, err)
+            self.wemo.reconnect_with_device()
