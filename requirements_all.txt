@@ -12,6 +12,7 @@ async_timeout==2.0.0
 chardet==3.0.4
 astral==1.5
 certifi>=2017.4.17
+attrs==17.4.0
 
 # homeassistant.components.nuimo_controller
 --only-binary=all https://github.com/getSenic/nuimo-linux-python/archive/29fc42987f74d8090d0e2382e8f248ff5990b8c9.zip#nuimo==1.0.0
@@ -117,7 +118,7 @@ basicmodem==0.7
 batinfo==0.4.2
 
 # homeassistant.components.sensor.eddystone_temperature
-# beacontools[scan]==1.0.1
+# beacontools[scan]==1.2.1
 
 # homeassistant.components.device_tracker.linksys_ap
 # homeassistant.components.sensor.geizhals
@@ -453,7 +454,7 @@ liffylights==0.9.4
 lightify==1.0.6.1
 
 # homeassistant.components.light.limitlessled
-limitlessled==1.0.9
+limitlessled==1.0.8
 
 # homeassistant.components.linode
 linode-api==4.1.4b2
@@ -921,7 +922,7 @@ python-juicenet==0.0.5
 # homeassistant.components.remote.xiaomi_miio
 # homeassistant.components.switch.xiaomi_miio
 # homeassistant.components.vacuum.xiaomi_miio
-python-miio==0.3.5
+python-miio==0.3.6
 
 # homeassistant.components.media_player.mpd
 python-mpd2==0.5.5
@@ -1275,7 +1276,7 @@ zeroconf==0.19.1
 ziggo-mediabox-xl==1.0.0
 
 # homeassistant.components.zha
-zigpy-xbee==0.0.1
+zigpy-xbee==0.0.2
 
 # homeassistant.components.zha
 zigpy==0.0.1
