@@ -208,8 +208,8 @@ class WemoDimmer(Light):
             self._state = self.wemo.get_state(force_update)
             wemobrightness = int(self.wemo.get_brightness(force_update))
             self._brightness = int((wemobrightness * 255) / 100)
-        except AttributeError as err:
-            _LOGGER.warning("Could not update status for %s (%s)",
+        except (AttributeError, ConnectionError) as err:
+            _LOGGER.warning("Could not update status for %s (%s). Will attempt reconnection.",
                             self.name, err)
             self.wemo.reconnect_with_device()
 
@@ -235,7 +235,7 @@ class WemoDimmer(Light):
         """Turn the dimmer off."""
         try:
             self.wemo.off()
-        except AttributeError as err:
-            _LOGGER.warning("Could not turn off %s (%s)",
+        except (AttributeError, ConnectionError) as err:
+            _LOGGER.warning("Could not turn off %s (%s). Will attempt reconnection.",
                             self.name, err)
             self.wemo.reconnect_with_device()
