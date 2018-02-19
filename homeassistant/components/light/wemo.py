@@ -226,8 +226,8 @@ class WemoDimmer(Light):
             else:
                 brightness = 255
             self.wemo.set_brightness(brightness)
-        except AttributeError as err:
-            _LOGGER.warning("Could not turn on %s (%s)",
+        except (AttributeError, ConnectionError) as err:
+            _LOGGER.warning("Could not turn on %s (%s). Will attempt reconnection.",
                             self.name, err)
             self.wemo.reconnect_with_device()
 
