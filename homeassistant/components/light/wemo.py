@@ -16,6 +16,8 @@ from homeassistant.components.light import (
     SUPPORT_TRANSITION, SUPPORT_XY_COLOR)
 from homeassistant.loader import get_component
 
+from requests.exceptions import ConnectionError
+
 DEPENDENCIES = ['wemo']
 
 MIN_TIME_BETWEEN_SCANS = timedelta(seconds=10)
