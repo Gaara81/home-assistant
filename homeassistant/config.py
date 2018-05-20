@@ -1,5 +1,4 @@
 """Module to help with parsing and generating configuration files."""
-import asyncio
 from collections import OrderedDict
 # pylint: disable=no-name-in-module
 from distutils.version import LooseVersion  # pylint: disable=import-error
@@ -7,19 +6,20 @@ import logging
 import os
 import re
 import shutil
-import sys
 # pylint: disable=unused-import
 from typing import Any, List, Tuple  # NOQA
 
 import voluptuous as vol
 from voluptuous.humanize import humanize_error
 
+from homeassistant import auth
 from homeassistant.const import (
+    ATTR_FRIENDLY_NAME, ATTR_HIDDEN, ATTR_ASSUMED_STATE,
     CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME, CONF_PACKAGES, CONF_UNIT_SYSTEM,
     CONF_TIME_ZONE, CONF_ELEVATION, CONF_UNIT_SYSTEM_METRIC,
     CONF_UNIT_SYSTEM_IMPERIAL, CONF_TEMPERATURE_UNIT, TEMP_CELSIUS,
     __version__, CONF_CUSTOMIZE, CONF_CUSTOMIZE_DOMAIN, CONF_CUSTOMIZE_GLOB,
-    CONF_WHITELIST_EXTERNAL_DIRS)
+    CONF_WHITELIST_EXTERNAL_DIRS, CONF_AUTH_PROVIDERS)
 from homeassistant.core import callback, DOMAIN as CONF_CORE
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.loader import get_component, get_platform
@@ -131,13 +131,19 @@ PACKAGES_CONFIG_SCHEMA = vol.Schema({
         {cv.slug: vol.Any(dict, list, None)})  # Only slugs for component names
 })
 
+CUSTOMIZE_DICT_SCHEMA = vol.Schema({
+    vol.Optional(ATTR_FRIENDLY_NAME): cv.string,
+    vol.Optional(ATTR_HIDDEN): cv.boolean,
+    vol.Optional(ATTR_ASSUMED_STATE): cv.boolean,
+}, extra=vol.ALLOW_EXTRA)
+
 CUSTOMIZE_CONFIG_SCHEMA = vol.Schema({
     vol.Optional(CONF_CUSTOMIZE, default={}):
-        vol.Schema({cv.entity_id: dict}),
+        vol.Schema({cv.entity_id: CUSTOMIZE_DICT_SCHEMA}),
     vol.Optional(CONF_CUSTOMIZE_DOMAIN, default={}):
-        vol.Schema({cv.string: dict}),
+        vol.Schema({cv.string: CUSTOMIZE_DICT_SCHEMA}),
     vol.Optional(CONF_CUSTOMIZE_GLOB, default={}):
-        vol.Schema({cv.string: OrderedDict}),
+        vol.Schema({cv.string: CUSTOMIZE_DICT_SCHEMA}),
 })
 
 CORE_CONFIG_SCHEMA = CUSTOMIZE_CONFIG_SCHEMA.extend({
@@ -152,6 +158,8 @@ CORE_CONFIG_SCHEMA = CUSTOMIZE_CONFIG_SCHEMA.extend({
         # pylint: disable=no-value-for-parameter
         vol.All(cv.ensure_list, [vol.IsDir()]),
     vol.Optional(CONF_PACKAGES, default={}): PACKAGES_CONFIG_SCHEMA,
+    vol.Optional(CONF_AUTH_PROVIDERS):
+        vol.All(cv.ensure_list, [auth.AUTH_PROVIDER_SCHEMA])
 })
 
 
@@ -389,6 +397,12 @@ async def async_process_ha_core_config(hass, config):
     This method is a coroutine.
     """
     config = CORE_CONFIG_SCHEMA(config)
+
+    # Only load auth during startup.
+    if not hasattr(hass, 'auth'):
+        hass.auth = await auth.auth_manager_from_config(
+            hass, config.get(CONF_AUTH_PROVIDERS, []))
+
     hac = hass.config
 
     def set_time_zone(time_zone_str):
@@ -534,7 +548,8 @@ def _identify_config_schema(module):
     return '', schema
 
 
-def merge_packages_config(config, packages, _log_pkg_error=_log_pkg_error):
+def merge_packages_config(hass, config, packages,
+                          _log_pkg_error=_log_pkg_error):
     """Merge packages into the top-level configuration. Mutate config."""
     # pylint: disable=too-many-nested-blocks
     PACKAGES_CONFIG_SCHEMA(packages)
@@ -542,13 +557,15 @@ def merge_packages_config(config, packages, _log_pkg_error=_log_pkg_error):
         for comp_name, comp_conf in pack_conf.items():
             if comp_name == CONF_CORE:
                 continue
-            component = get_component(comp_name)
+            component = get_component(hass, comp_name)
 
             if component is None:
                 _log_pkg_error(pack_name, comp_name, config, "does not exist")
                 continue
 
             if hasattr(component, 'PLATFORM_SCHEMA'):
+                if not comp_conf:
+                    continue  # Ensure we dont add Falsy items to list
                 config[comp_name] = cv.ensure_list(config.get(comp_name))
                 config[comp_name].extend(cv.ensure_list(comp_conf))
                 continue
@@ -557,6 +574,8 @@ def merge_packages_config(config, packages, _log_pkg_error=_log_pkg_error):
                 merge_type, _ = _identify_config_schema(component)
 
                 if merge_type == 'list':
+                    if not comp_conf:
+                        continue  # Ensure we dont add Falsy items to list
                     config[comp_name] = cv.ensure_list(config.get(comp_name))
                     config[comp_name].extend(cv.ensure_list(comp_conf))
                     continue
@@ -607,7 +626,7 @@ def async_process_component_config(hass, config, domain):
 
     This method must be run in the event loop.
     """
-    component = get_component(domain)
+    component = get_component(hass, domain)
 
     if hasattr(component, 'CONFIG_SCHEMA'):
         try:
@@ -633,7 +652,7 @@ def async_process_component_config(hass, config, domain):
                 platforms.append(p_validated)
                 continue
 
-            platform = get_platform(domain, p_name)
+            platform = get_platform(hass, domain, p_name)
 
             if platform is None:
                 continue
@@ -665,22 +684,14 @@ async def async_check_ha_config_file(hass):
 
     This method is a coroutine.
     """
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable, '-m', 'homeassistant', '--script',
-        'check_config', '--config', hass.config.config_dir,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT, loop=hass.loop)
+    from homeassistant.scripts.check_config import check_ha_config_file
 
-    # Wait for the subprocess exit
-    log, _ = await proc.communicate()
-    exit_code = await proc.wait()
+    res = await hass.async_add_job(
+        check_ha_config_file, hass)
 
-    # Convert to ASCII
-    log = RE_ASCII.sub('', log.decode())
-
-    if exit_code != 0 or RE_YAML_ERROR.search(log):
-        return log
-    return None
+    if not res.errors:
+        return None
+    return '\n'.join([err.message for err in res.errors])
 
 
 @callback

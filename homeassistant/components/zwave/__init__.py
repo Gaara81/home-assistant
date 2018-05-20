@@ -20,7 +20,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_START, EVENT_HOMEASSISTANT_STOP)
 from homeassistant.helpers.entity_values import EntityValues
 from homeassistant.helpers.event import track_time_change
-from homeassistant.util import convert, slugify
+from homeassistant.util import convert
 import homeassistant.util.dt as dt_util
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import (
@@ -52,7 +52,6 @@ CONF_DEVICE_CONFIG = 'device_config'
 CONF_DEVICE_CONFIG_GLOB = 'device_config_glob'
 CONF_DEVICE_CONFIG_DOMAIN = 'device_config_domain'
 CONF_NETWORK_KEY = 'network_key'
-CONF_NEW_ENTITY_IDS = 'new_entity_ids'
 
 ATTR_POWER = 'power_consumption'
 
@@ -161,7 +160,6 @@ CONFIG_SCHEMA = vol.Schema({
             cv.positive_int,
         vol.Optional(CONF_USB_STICK_PATH, default=DEFAULT_CONF_USB_STICK_PATH):
             cv.string,
-        vol.Optional(CONF_NEW_ENTITY_IDS, default=True): cv.boolean,
     }),
 }, extra=vol.ALLOW_EXTRA)
 
@@ -178,37 +176,14 @@ def _value_name(value):
     return '{} {}'.format(node_name(value.node), value.label).strip()
 
 
-def _node_object_id(node):
-    """Return the object_id of the node."""
-    node_object_id = '{}_{}'.format(slugify(node_name(node)), node.node_id)
-    return node_object_id
-
-
-def object_id(value):
-    """Return the object_id of the device value.
-
-    The object_id contains node_id and value instance id
-    to not collide with other entity_ids.
-    """
-    _object_id = "{}_{}_{}".format(slugify(_value_name(value)),
-                                   value.node.node_id, value.index)
-
-    # Add the instance id if there is more than one instance for the value
-    if value.instance > 1:
-        return '{}_{}'.format(_object_id, value.instance)
-    return _object_id
-
-
 def nice_print_node(node):
     """Print a nice formatted node to the output (debug method)."""
     node_dict = _obj_to_dict(node)
     node_dict['values'] = {value_id: _obj_to_dict(value)
                            for value_id, value in node.values.items()}
 
-    print("\n\n\n")
-    print("FOUND NODE", node.product_name)
-    pprint(node_dict)
-    print("\n\n\n")
+    _LOGGER.info("FOUND NODE %s \n"
+                 "%s", node.product_name, node_dict)
 
 
 def get_config_value(node, value_index, tries=5):
@@ -226,8 +201,8 @@ def get_config_value(node, value_index, tries=5):
     return None
 
 
-@asyncio.coroutine
-def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_devices,
+                               discovery_info=None):
     """Set up the Z-Wave platform (generic part)."""
     if discovery_info is None or DATA_NETWORK not in hass.data:
         return False
@@ -260,13 +235,6 @@ def setup(hass, config):
         config[DOMAIN][CONF_DEVICE_CONFIG],
         config[DOMAIN][CONF_DEVICE_CONFIG_DOMAIN],
         config[DOMAIN][CONF_DEVICE_CONFIG_GLOB])
-    new_entity_ids = config[DOMAIN][CONF_NEW_ENTITY_IDS]
-    if not new_entity_ids:
-        _LOGGER.warning(
-            "ZWave entity_ids will soon be changing. To opt in to new "
-            "entity_ids now, set `new_entity_ids: true` under zwave in your "
-            "configuration.yaml. See the following blog post for details: "
-            "https://home-assistant.io/blog/2017/06/15/zwave-entity-ids/")
 
     # Setup options
     options = ZWaveOption(
@@ -328,19 +296,47 @@ def setup(hass, config):
 
     def node_added(node):
         """Handle a new node on the network."""
-        entity = ZWaveNodeEntity(node, network, new_entity_ids)
-        name = node_name(node)
-        if new_entity_ids:
+        entity = ZWaveNodeEntity(node, network)
+
+        def _add_node_to_component():
+            name = node_name(node)
             generated_id = generate_entity_id(DOMAIN + '.{}', name, [])
-        else:
-            generated_id = entity.entity_id
-        node_config = device_config.get(generated_id)
-        if node_config.get(CONF_IGNORED):
-            _LOGGER.info(
-                "Ignoring node entity %s due to device settings",
-                generated_id)
+            node_config = device_config.get(generated_id)
+            if node_config.get(CONF_IGNORED):
+                _LOGGER.info(
+                    "Ignoring node entity %s due to device settings",
+                    generated_id)
+                return
+            component.add_entities([entity])
+
+        if entity.unique_id:
+            _add_node_to_component()
             return
-        component.add_entities([entity])
+
+        async def _check_node_ready():
+            """Wait for node to be parsed."""
+            start_time = dt_util.utcnow()
+            while True:
+                waited = int((dt_util.utcnow()-start_time).total_seconds())
+
+                if entity.unique_id:
+                    _LOGGER.info("Z-Wave node %d ready after %d seconds",
+                                 entity.node_id, waited)
+                    break
+                elif waited >= const.NODE_READY_WAIT_SECS:
+                    # Wait up to NODE_READY_WAIT_SECS seconds for the Z-Wave
+                    # node to be ready.
+                    _LOGGER.warning(
+                        "Z-Wave node %d not ready after %d seconds, "
+                        "continuing anyway",
+                        entity.node_id, waited)
+                    break
+                else:
+                    await asyncio.sleep(1, loop=hass.loop)
+
+            hass.async_add_job(_add_node_to_component)
+
+        hass.add_job(_check_node_ready)
 
     def network_ready():
         """Handle the query of all awake nodes."""
@@ -393,6 +389,11 @@ def setup(hass, config):
         """Soft reset the controller."""
         _LOGGER.info("Z-Wave soft_reset have been initialized")
         network.controller.soft_reset()
+
+    def update_config(service):
+        """Update the config from git."""
+        _LOGGER.info("Configuration update has been initialized")
+        network.controller.update_ozw_config()
 
     def test_network(service):
         """Test the network by sending commands to all the nodes."""
@@ -475,9 +476,16 @@ def setup(hass, config):
             if value.index != param:
                 continue
             if value.type in [const.TYPE_LIST, const.TYPE_BOOL]:
-                value.data = selection
-                _LOGGER.info("Setting config list parameter %s on Node %s "
-                             "with selection %s", param, node_id,
+                value.data = str(selection)
+                _LOGGER.info("Setting config parameter %s on Node %s "
+                             "with list/bool selection %s", param, node_id,
+                             str(selection))
+                return
+            if value.type == const.TYPE_BUTTON:
+                network.manager.pressButton(value.value_id)
+                network.manager.releaseButton(value.value_id)
+                _LOGGER.info("Setting config parameter %s on Node %s "
+                             "with button selection %s", param, node_id,
                              selection)
                 return
             value.data = int(selection)
@@ -537,8 +545,7 @@ def setup(hass, config):
                          "target node:%s, instance=%s", node_id, group,
                          target_node_id, instance)
 
-    @asyncio.coroutine
-    def async_refresh_entity(service):
+    async def async_refresh_entity(service):
         """Refresh values that specific entity depends on."""
         entity_id = service.data.get(ATTR_ENTITY_ID)
         async_dispatcher_send(
@@ -592,8 +599,7 @@ def setup(hass, config):
         network.start()
         hass.bus.fire(const.EVENT_NETWORK_START)
 
-        @asyncio.coroutine
-        def _check_awaked():
+        async def _check_awaked():
             """Wait for Z-wave awaked state (or timeout) and finalize start."""
             _LOGGER.debug(
                 "network state: %d %s", network.state,
@@ -618,7 +624,7 @@ def setup(hass, config):
                         network.state_str)
                     break
                 else:
-                    yield from asyncio.sleep(1, loop=hass.loop)
+                    await asyncio.sleep(1, loop=hass.loop)
 
             hass.async_add_job(_finalize_start)
 
@@ -646,6 +652,8 @@ def setup(hass, config):
         hass.services.register(DOMAIN, const.SERVICE_HEAL_NETWORK,
                                heal_network)
         hass.services.register(DOMAIN, const.SERVICE_SOFT_RESET, soft_reset)
+        hass.services.register(DOMAIN, const.SERVICE_UPDATE_CONFIG,
+                               update_config)
         hass.services.register(DOMAIN, const.SERVICE_TEST_NETWORK,
                                test_network)
         hass.services.register(DOMAIN, const.SERVICE_STOP_NETWORK,
@@ -794,11 +802,7 @@ class ZWaveDeviceEntityValues():
             component = workaround_component
 
         value_name = _value_name(self.primary)
-        if self._zwave_config[DOMAIN][CONF_NEW_ENTITY_IDS]:
-            generated_id = generate_entity_id(
-                component + '.{}', value_name, [])
-        else:
-            generated_id = "{}.{}".format(component, object_id(self.primary))
+        generated_id = generate_entity_id(component + '.{}', value_name, [])
         node_config = self._device_config.get(generated_id)
 
         # Configure node
@@ -822,7 +826,7 @@ class ZWaveDeviceEntityValues():
         if polling_intensity:
             self.primary.enable_poll(polling_intensity)
 
-        platform = get_platform(component, DOMAIN)
+        platform = get_platform(self._hass, component, DOMAIN)
         device = platform.get_device(
             node=self._node, values=self,
             node_config=node_config, hass=self._hass)
@@ -831,21 +835,14 @@ class ZWaveDeviceEntityValues():
             self._workaround_ignore = True
             return
 
-        device.old_entity_id = "{}.{}".format(
-            component, object_id(self.primary))
-        device.new_entity_id = "{}.{}".format(component, slugify(device.name))
-        if not self._zwave_config[DOMAIN][CONF_NEW_ENTITY_IDS]:
-            device.entity_id = device.old_entity_id
-
         self._entity = device
 
         dict_id = id(self)
 
-        @asyncio.coroutine
-        def discover_device(component, device, dict_id):
+        async def discover_device(component, device, dict_id):
             """Put device in a dictionary and call discovery on it."""
             self._hass.data[DATA_DEVICES][dict_id] = device
-            yield from discovery.async_load_platform(
+            await discovery.async_load_platform(
                 self._hass, component, DOMAIN,
                 {const.DISCOVERY_DEVICE: dict_id}, self._zwave_config)
         self._hass.add_job(discover_device, component, device, dict_id)
@@ -887,8 +884,7 @@ class ZWaveDeviceEntity(ZWaveBaseEntity):
         self.update_properties()
         self.maybe_schedule_update()
 
-    @asyncio.coroutine
-    def async_added_to_hass(self):
+    async def async_added_to_hass(self):
         """Add device to dict."""
         async_dispatcher_connect(
             self.hass,
@@ -932,8 +928,6 @@ class ZWaveDeviceEntity(ZWaveBaseEntity):
             const.ATTR_VALUE_INDEX: self.values.primary.index,
             const.ATTR_VALUE_INSTANCE: self.values.primary.instance,
             const.ATTR_VALUE_ID: str(self.values.primary.value_id),
-            'old_entity_id': self.old_entity_id,
-            'new_entity_id': self.new_entity_id,
         }
 
         if self.power_consumption is not None:
