@@ -8,7 +8,8 @@ import subprocess
 import sys
 import threading
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any  # noqa #pylint: disable=unused-import
+
 
 from homeassistant import monkey_patch
 from homeassistant.const import (
@@ -240,7 +241,7 @@ def cmdline() -> List[str]:
 
 
 def setup_and_run_hass(config_dir: str,
-                       args: argparse.Namespace) -> Optional[int]:
+                       args: argparse.Namespace) -> int:
     """Set up HASS and run."""
     from homeassistant import bootstrap
 
@@ -259,7 +260,7 @@ def setup_and_run_hass(config_dir: str,
         config = {
             'frontend': {},
             'demo': {}
-        }
+        }  # type: Dict[str, Any]
         hass = bootstrap.from_config_dict(
             config, config_dir=config_dir, verbose=args.verbose,
             skip_pip=args.skip_pip, log_rotate_days=args.log_rotate_days,
@@ -273,7 +274,7 @@ def setup_and_run_hass(config_dir: str,
             log_no_color=args.log_no_color)
 
     if hass is None:
-        return None
+        return -1
 
     if args.open_ui:
         # Imported here to avoid importing asyncio before monkey patch

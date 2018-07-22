@@ -30,7 +30,8 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
                   device.address.hex, device.states[state_key].name)
 
     new_entity = None
-    if state_name in ['lightOnOff', 'outletTopOnOff', 'outletBottomOnOff']:
+    if state_name in ['lightOnOff', 'outletTopOnOff', 'outletBottomOnOff',
+                      'x10OnOffSwitch']:
         new_entity = InsteonPLMSwitchDevice(device, state_key)
     elif state_name == 'openClosedRelay':
         new_entity = InsteonPLMOpenClosedDevice(device, state_key)
@@ -45,8 +46,7 @@ class InsteonPLMSwitchDevice(InsteonPLMEntity, SwitchDevice):
     @property
     def is_on(self):
         """Return the boolean response if the node is on."""
-        onlevel = self._insteon_device_state.value
-        return bool(onlevel)
+        return bool(self._insteon_device_state.value)
 
     @asyncio.coroutine
     def async_turn_on(self, **kwargs):
@@ -61,6 +61,11 @@ class InsteonPLMSwitchDevice(InsteonPLMEntity, SwitchDevice):
 
 class InsteonPLMOpenClosedDevice(InsteonPLMEntity, SwitchDevice):
     """A Class for an Insteon device."""
+
+    @property
+    def is_on(self):
+        """Return the boolean response if the node is on."""
+        return bool(self._insteon_device_state.value)
 
     @asyncio.coroutine
     def async_turn_on(self, **kwargs):

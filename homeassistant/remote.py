@@ -31,7 +31,6 @@ _LOGGER = logging.getLogger(__name__)
 class APIStatus(enum.Enum):
     """Representation of an API status."""
 
-    # pylint: disable=no-init, invalid-name
     OK = "ok"
     INVALID_PASSWORD = "invalid_password"
     CANNOT_CONNECT = "cannot_connect"
@@ -39,7 +38,7 @@ class APIStatus(enum.Enum):
 
     def __str__(self) -> str:
         """Return the state."""
-        return self.value
+        return self.value  # type: ignore
 
 
 class API(object):

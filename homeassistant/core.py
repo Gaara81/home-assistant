@@ -4,7 +4,7 @@ Core components of Home Assistant.
 Home Assistant is a Home Automation framework for observing the state
 of entities and react to changes.
 """
-# pylint: disable=unused-import, too-many-lines
+# pylint: disable=unused-import
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import enum
@@ -17,7 +17,8 @@ import threading
 from time import monotonic
 
 from types import MappingProxyType
-from typing import Optional, Any, Callable, List  # NOQA
+from typing import (  # NOQA
+    Optional, Any, Callable, List, TypeVar, Dict, Coroutine)
 
 from async_timeout import timeout
 import voluptuous as vol
@@ -40,6 +41,8 @@ import homeassistant.util as util
 import homeassistant.util.dt as dt_util
 import homeassistant.util.location as location
 from homeassistant.util.unit_system import UnitSystem, METRIC_SYSTEM  # NOQA
+
+T = TypeVar('T')
 
 DOMAIN = 'homeassistant'
 
@@ -70,16 +73,15 @@ def valid_state(state: str) -> bool:
     return len(state) < 256
 
 
-def callback(func: Callable[..., None]) -> Callable[..., None]:
+def callback(func: Callable[..., T]) -> Callable[..., T]:
     """Annotation to mark method as safe to call from within the event loop."""
-    # pylint: disable=protected-access
-    func._hass_callback = True
+    setattr(func, '_hass_callback', True)
     return func
 
 
 def is_callback(func: Callable[..., Any]) -> bool:
     """Check if function is safe to be called in the event loop."""
-    return '_hass_callback' in getattr(func, '__dict__', {})
+    return getattr(func, '_hass_callback', False) is True
 
 
 @callback
@@ -104,7 +106,7 @@ class CoreState(enum.Enum):
 
     def __str__(self) -> str:
         """Return the event."""
-        return self.value
+        return self.value  # type: ignore
 
 
 class HomeAssistant(object):
@@ -135,14 +137,15 @@ class HomeAssistant(object):
         # This is a dictionary that any component can store any data on.
         self.data = {}
         self.state = CoreState.not_running
-        self.exit_code = None
+        self.exit_code = 0  # type: int
+        self.config_entries = None
 
     @property
     def is_running(self) -> bool:
         """Return if Home Assistant is running."""
         return self.state in (CoreState.starting, CoreState.running)
 
-    def start(self) -> None:
+    def start(self) -> int:
         """Start home assistant."""
         # Register the async start
         fire_coroutine_threadsafe(self.async_start(), self.loop)
@@ -152,13 +155,13 @@ class HomeAssistant(object):
             # Block until stopped
             _LOGGER.info("Starting Home Assistant core loop")
             self.loop.run_forever()
-            return self.exit_code
         except KeyboardInterrupt:
             self.loop.call_soon_threadsafe(
                 self.loop.create_task, self.async_stop())
             self.loop.run_forever()
         finally:
             self.loop.close()
+        return self.exit_code
 
     async def async_start(self):
         """Finalize startup from inside the event loop.
@@ -200,8 +203,11 @@ class HomeAssistant(object):
         self.loop.call_soon_threadsafe(self.async_add_job, target, *args)
 
     @callback
-    def async_add_job(self, target: Callable[..., None], *args: Any) -> None:
-        """Add a job from within the eventloop.
+    def async_add_job(
+            self,
+            target: Callable[..., Any],
+            *args: Any) -> Optional[asyncio.Future]:
+        """Add a job from within the event loop.
 
         This method must be run in the event loop.
 
@@ -221,6 +227,36 @@ class HomeAssistant(object):
 
         # If a task is scheduled
         if self._track_task and task is not None:
+            self._pending_tasks.append(task)
+
+        return task
+
+    @callback
+    def async_create_task(self, target: Coroutine) -> asyncio.tasks.Task:
+        """Create a task from within the eventloop.
+
+        This method must be run in the event loop.
+
+        target: target to call.
+        """
+        task = self.loop.create_task(target)  # type: asyncio.tasks.Task
+
+        if self._track_task:
+            self._pending_tasks.append(task)
+
+        return task
+
+    @callback
+    def async_add_executor_job(
+            self,
+            target: Callable[..., Any],
+            *args: Any) -> asyncio.Future:
+        """Add an executor job from within the event loop."""
+        task = self.loop.run_in_executor(
+            None, target, *args)  # type: asyncio.Future
+
+        # If a task is scheduled
+        if self._track_task:
             self._pending_tasks.append(task)
 
         return task
@@ -272,7 +308,7 @@ class HomeAssistant(object):
         """Stop Home Assistant and shuts down all threads."""
         fire_coroutine_threadsafe(self.async_stop(), self.loop)
 
-    async def async_stop(self, exit_code=0) -> None:
+    async def async_stop(self, exit_code: int = 0) -> None:
         """Stop Home Assistant and shuts down all threads.
 
         This method is a coroutine.
@@ -354,7 +390,7 @@ class EventBus(object):
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize a new event bus."""
-        self._listeners = {}
+        self._listeners = {}  # type: Dict[str, List[Callable]]
         self._hass = hass
 
     @callback
@@ -1039,7 +1075,7 @@ class Config(object):
         # List of allowed external dirs to access
         self.whitelist_external_dirs = set()
 
-    def distance(self: object, lat: float, lon: float) -> float:
+    def distance(self, lat: float, lon: float) -> float:
         """Calculate distance from Home Assistant.
 
         Async friendly.
