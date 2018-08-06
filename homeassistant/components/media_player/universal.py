@@ -234,7 +234,7 @@ class UniversalMediaPlayer(MediaPlayerDevice):
     @property
     def media_image_url(self):
         """Image url of current playing media."""
-        return self._child_attr(ATTR_ENTITY_PICTURE)
+        return self._override_or_child_attr(ATTR_ENTITY_PICTURE)
 
     @property
     def entity_picture(self):
@@ -250,7 +250,7 @@ class UniversalMediaPlayer(MediaPlayerDevice):
     @property
     def media_title(self):
         """Title of current playing media."""
-        return self._child_attr(ATTR_MEDIA_TITLE)
+        return self._override_or_child_attr(ATTR_MEDIA_TITLE)
 
     @property
     def media_artist(self):
