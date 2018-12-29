@@ -9,7 +9,8 @@ import logging
 import voluptuous as vol
 
 from homeassistant.core import callback
-from homeassistant.const import EVENT_HOMEASSISTANT_START
+from homeassistant.const import (
+    EVENT_HOMEASSISTANT_START, EVENT_COMPONENT_LOADED)
 import homeassistant.config as config_util
 from homeassistant import setup, loader
 import homeassistant.util.dt as dt_util
@@ -34,7 +35,7 @@ class TestSetup:
 
     # pylint: disable=invalid-name, no-self-use
     def setup_method(self, method):
-        """Setup the test."""
+        """Set up the test."""
         self.hass = get_test_home_assistant()
 
     def teardown_method(self, method):
@@ -179,7 +180,7 @@ class TestSetup:
         assert not setup.setup_component(self.hass, 'non_existing')
 
     def test_component_not_double_initialized(self):
-        """Test we do not setup a component twice."""
+        """Test we do not set up a component twice."""
         mock_setup = mock.MagicMock(return_value=True)
 
         loader.set_component(
@@ -206,7 +207,7 @@ class TestSetup:
         assert 'comp' not in self.hass.config.components
 
     def test_component_not_setup_twice_if_loaded_during_other_setup(self):
-        """Test component setup while waiting for lock is not setup twice."""
+        """Test component setup while waiting for lock is not set up twice."""
         result = []
 
         @asyncio.coroutine
@@ -219,7 +220,7 @@ class TestSetup:
             'comp', MockModule('comp', async_setup=async_setup))
 
         def setup_component():
-            """Setup the component."""
+            """Set up the component."""
             setup.setup_component(self.hass, 'comp')
 
         thread = threading.Thread(target=setup_component)
@@ -231,7 +232,7 @@ class TestSetup:
         assert len(result) == 1
 
     def test_component_not_setup_missing_dependencies(self):
-        """Test we do not setup a component if not all dependencies loaded."""
+        """Test we do not set up a component if not all dependencies loaded."""
         deps = ['non_existing']
         loader.set_component(
             self.hass, 'comp', MockModule('comp', dependencies=deps))
@@ -257,7 +258,7 @@ class TestSetup:
     def test_component_exception_setup(self):
         """Test component that raises exception during setup."""
         def exception_setup(hass, config):
-            """Setup that raises exception."""
+            """Raise exception."""
             raise Exception('fail!')
 
         loader.set_component(
@@ -269,7 +270,7 @@ class TestSetup:
     def test_component_setup_with_validation_and_dependency(self):
         """Test all config is passed to dependencies."""
         def config_check_setup(hass, config):
-            """Setup method that tests config is passed in."""
+            """Test that config is passed in."""
             if config.get('comp_a', {}).get('valid', False):
                 return True
             raise Exception('Config not passed in: {}'.format(config))
@@ -377,7 +378,7 @@ class TestSetup:
         call_order = []
 
         def component1_setup(hass, config):
-            """Setup mock component."""
+            """Set up mock component."""
             discovery.discover(hass, 'test_component2',
                                component='test_component2')
             discovery.discover(hass, 'test_component3',
@@ -385,7 +386,7 @@ class TestSetup:
             return True
 
         def component_track_setup(hass, config):
-            """Setup mock component."""
+            """Set up mock component."""
             call_order.append(1)
             return True
 
@@ -459,3 +460,35 @@ def test_platform_no_warn_slow(hass):
             hass, 'test_component1', {})
         assert result
         assert not mock_call.called
+
+
+async def test_when_setup_already_loaded(hass):
+    """Test when setup."""
+    calls = []
+
+    async def mock_callback(hass, component):
+        """Mock callback."""
+        calls.append(component)
+
+    setup.async_when_setup(hass, 'test', mock_callback)
+    await hass.async_block_till_done()
+    assert calls == []
+
+    hass.config.components.add('test')
+    hass.bus.async_fire(EVENT_COMPONENT_LOADED, {
+        'component': 'test'
+    })
+    await hass.async_block_till_done()
+    assert calls == ['test']
+
+    # Event listener should be gone
+    hass.bus.async_fire(EVENT_COMPONENT_LOADED, {
+        'component': 'test'
+    })
+    await hass.async_block_till_done()
+    assert calls == ['test']
+
+    # Should be called right away
+    setup.async_when_setup(hass, 'test', mock_callback)
+    await hass.async_block_till_done()
+    assert calls == ['test', 'test']

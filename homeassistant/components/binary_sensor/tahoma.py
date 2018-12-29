@@ -21,14 +21,14 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=120)
 
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
+def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up Tahoma controller devices."""
     _LOGGER.debug("Setup Tahoma Binary sensor platform")
     controller = hass.data[TAHOMA_DOMAIN]['controller']
     devices = []
     for device in hass.data[TAHOMA_DOMAIN]['devices']['smoke']:
         devices.append(TahomaBinarySensor(device, controller))
-    add_devices(devices, True)
+    add_entities(devices, True)
 
 
 class TahomaBinarySensor(TahomaDevice, BinarySensorDevice):
@@ -41,6 +41,7 @@ class TahomaBinarySensor(TahomaDevice, BinarySensorDevice):
         self._state = None
         self._icon = None
         self._battery = None
+        self._available = False
 
     @property
     def is_on(self):
@@ -71,6 +72,11 @@ class TahomaBinarySensor(TahomaDevice, BinarySensorDevice):
             attr[ATTR_BATTERY_LEVEL] = self._battery
         return attr
 
+    @property
+    def available(self):
+        """Return True if entity is available."""
+        return self._available
+
     def update(self):
         """Update the state."""
         self.controller.get_states([self.tahoma_device])
@@ -82,11 +88,13 @@ class TahomaBinarySensor(TahomaDevice, BinarySensorDevice):
                 self._state = STATE_ON
 
         if 'core:SensorDefectState' in self.tahoma_device.active_states:
-            # Set to 'lowBattery' for low battery warning.
+            # 'lowBattery' for low battery warning. 'dead' for not available.
             self._battery = self.tahoma_device.active_states[
                 'core:SensorDefectState']
+            self._available = bool(self._battery != 'dead')
         else:
             self._battery = None
+            self._available = True
 
         if self._state == STATE_ON:
             self._icon = "mdi:fire"

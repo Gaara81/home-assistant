@@ -1,20 +1,10 @@
 """Test config entries API."""
-from unittest.mock import PropertyMock, patch
-
 import pytest
 
 from homeassistant.auth import models as auth_models
 from homeassistant.components.config import auth as auth_config
 
-from tests.common import MockUser, CLIENT_ID
-
-
-@pytest.fixture(autouse=True)
-def auth_active(hass):
-    """Mock that auth is active."""
-    with patch('homeassistant.auth.AuthManager.active',
-               PropertyMock(return_value=True)):
-        yield
+from tests.common import MockGroup, MockUser, CLIENT_ID
 
 
 @pytest.fixture(autouse=True)
@@ -37,12 +27,15 @@ async def test_list_requires_owner(hass, hass_ws_client, hass_access_token):
     assert result['error']['code'] == 'unauthorized'
 
 
-async def test_list(hass, hass_ws_client):
+async def test_list(hass, hass_ws_client, hass_admin_user):
     """Test get users."""
+    group = MockGroup().add_to_hass(hass)
+
     owner = MockUser(
         id='abc',
         name='Test Owner',
         is_owner=True,
+        groups=[group],
     ).add_to_hass(hass)
 
     owner.credentials.append(auth_models.Credentials(
@@ -61,6 +54,7 @@ async def test_list(hass, hass_ws_client):
         id='hij',
         name='Inactive User',
         is_active=False,
+        groups=[group],
     ).add_to_hass(hass)
 
     refresh_token = await hass.auth.async_create_refresh_token(
@@ -76,29 +70,41 @@ async def test_list(hass, hass_ws_client):
     result = await client.receive_json()
     assert result['success'], result
     data = result['result']
-    assert len(data) == 3
+    assert len(data) == 4
     assert data[0] == {
+        'id': hass_admin_user.id,
+        'name': 'Mock User',
+        'is_owner': False,
+        'is_active': True,
+        'system_generated': False,
+        'group_ids': [group.id for group in hass_admin_user.groups],
+        'credentials': []
+    }
+    assert data[1] == {
         'id': owner.id,
         'name': 'Test Owner',
         'is_owner': True,
         'is_active': True,
         'system_generated': False,
+        'group_ids': [group.id for group in owner.groups],
         'credentials': [{'type': 'homeassistant'}]
     }
-    assert data[1] == {
+    assert data[2] == {
         'id': system.id,
         'name': 'Test Hass.io',
         'is_owner': False,
         'is_active': True,
         'system_generated': True,
+        'group_ids': [],
         'credentials': [],
     }
-    assert data[2] == {
+    assert data[3] == {
         'id': inactive.id,
         'name': 'Inactive User',
         'is_owner': False,
         'is_active': False,
         'system_generated': False,
+        'group_ids': [group.id for group in inactive.groups],
         'credentials': [],
     }
 
@@ -122,11 +128,13 @@ async def test_delete_unable_self_account(hass, hass_ws_client,
                                           hass_access_token):
     """Test we cannot delete our own account."""
     client = await hass_ws_client(hass, hass_access_token)
+    refresh_token = await hass.auth.async_validate_access_token(
+        hass_access_token)
 
     await client.send_json({
         'id': 5,
         'type': auth_config.WS_TYPE_DELETE,
-        'user_id': hass_access_token.refresh_token.user.id,
+        'user_id': refresh_token.user.id,
     })
 
     result = await client.receive_json()
@@ -137,7 +145,9 @@ async def test_delete_unable_self_account(hass, hass_ws_client,
 async def test_delete_unknown_user(hass, hass_ws_client, hass_access_token):
     """Test we cannot delete an unknown user."""
     client = await hass_ws_client(hass, hass_access_token)
-    hass_access_token.refresh_token.user.is_owner = True
+    refresh_token = await hass.auth.async_validate_access_token(
+        hass_access_token)
+    refresh_token.user.is_owner = True
 
     await client.send_json({
         'id': 5,
@@ -153,7 +163,9 @@ async def test_delete_unknown_user(hass, hass_ws_client, hass_access_token):
 async def test_delete(hass, hass_ws_client, hass_access_token):
     """Test delete command works."""
     client = await hass_ws_client(hass, hass_access_token)
-    hass_access_token.refresh_token.user.is_owner = True
+    refresh_token = await hass.auth.async_validate_access_token(
+        hass_access_token)
+    refresh_token.user.is_owner = True
     test_user = MockUser(
         id='efg',
     ).add_to_hass(hass)
@@ -174,7 +186,9 @@ async def test_delete(hass, hass_ws_client, hass_access_token):
 async def test_create(hass, hass_ws_client, hass_access_token):
     """Test create command works."""
     client = await hass_ws_client(hass, hass_access_token)
-    hass_access_token.refresh_token.user.is_owner = True
+    refresh_token = await hass.auth.async_validate_access_token(
+        hass_access_token)
+    refresh_token.user.is_owner = True
 
     assert len(await hass.auth.async_get_users()) == 1
 

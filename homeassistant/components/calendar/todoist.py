@@ -26,9 +26,6 @@ CONF_PROJECT_DUE_DATE = 'due_date_days'
 CONF_PROJECT_LABEL_WHITELIST = 'labels'
 CONF_PROJECT_WHITELIST = 'include_projects'
 
-# https://github.com/PyCQA/pylint/pull/2320
-# pylint: disable=fixme
-
 # Calendar Platform: Does this calendar event last all day?
 ALL_DAY = 'all_day'
 # Attribute: All tasks in this project
@@ -119,7 +116,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=15)
 
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
+def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the Todoist platform."""
     token = config.get(CONF_TOKEN)
 
@@ -181,7 +178,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
             )
         )
 
-    add_devices(project_devices)
+    add_entities(project_devices)
 
     def handle_new_task(call):
         """Call when a user creates a new Todoist Task from HASS."""
@@ -521,6 +518,8 @@ class TodoistProjectData:
     def update(self):
         """Get the latest data."""
         if self._id is None:
+            self._api.reset_state()
+            self._api.sync()
             project_task_data = [
                 task for task in self._api.state[TASKS]
                 if not self._project_id_whitelist or
@@ -530,6 +529,7 @@ class TodoistProjectData:
 
         # If we have no data, we can just return right away.
         if not project_task_data:
+            _LOGGER.debug("No data for %s", self._name)
             self.event = None
             return True
 
@@ -544,6 +544,8 @@ class TodoistProjectData:
 
         if not project_tasks:
             # We had no valid tasks
+            _LOGGER.debug("No valid tasks for %s", self._name)
+            self.event = None
             return True
 
         # Make sure the task collection is reset to prevent an

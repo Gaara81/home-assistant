@@ -31,7 +31,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 _LOGGER = logging.getLogger(__name__)
 
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
+def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the Daikin sensors."""
     if discovery_info is not None:
         host = discovery_info.get('ip')
@@ -51,7 +51,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     for monitored_state in monitored_conditions:
         sensors.append(DaikinClimateSensor(api, monitored_state, units, name))
 
-    add_devices(sensors, True)
+    add_entities(sensors, True)
 
 
 class DaikinClimateSensor(Entity):
@@ -70,6 +70,11 @@ class DaikinClimateSensor(Entity):
 
         if self._sensor[CONF_TYPE] == SENSOR_TYPE_TEMPERATURE:
             self._unit_of_measurement = units.temperature_unit
+
+    @property
+    def unique_id(self):
+        """Return a unique ID."""
+        return "{}-{}".format(self._api.mac, self._device_attribute)
 
     def get(self, key):
         """Retrieve device settings from API library cache."""

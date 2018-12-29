@@ -4,7 +4,7 @@ import logging.handlers
 from timeit import default_timer as timer
 
 from types import ModuleType
-from typing import Optional, Dict, List
+from typing import Awaitable, Callable, Optional, Dict, List
 
 from homeassistant import requirements, core, loader, config as conf_util
 from homeassistant.config import async_notify_setup_error
@@ -64,7 +64,7 @@ async def _async_process_dependencies(
                    if dep in loader.DEPENDENCY_BLACKLIST]
 
     if blacklisted:
-        _LOGGER.error("Unable to setup dependencies of %s: "
+        _LOGGER.error("Unable to set up dependencies of %s: "
                       "found blacklisted dependencies: %s",
                       name, ', '.join(blacklisted))
         return False
@@ -81,7 +81,7 @@ async def _async_process_dependencies(
               in enumerate(results) if not res]
 
     if failed:
-        _LOGGER.error("Unable to setup dependencies of %s. "
+        _LOGGER.error("Unable to set up dependencies of %s. "
                       "Setup failed for dependencies: %s",
                       name, ', '.join(failed))
 
@@ -160,8 +160,8 @@ async def _async_setup_component(hass: core.HomeAssistant,
         log_error("Component failed to initialize.")
         return False
     if result is not True:
-        log_error("Component did not return boolean if setup was successful. "
-                  "Disabling component.")
+        log_error("Component {!r} did not return boolean if setup was "
+                  "successful. Disabling component.".format(domain))
         loader.set_component(hass, domain, None)
         return False
 
@@ -238,7 +238,7 @@ async def async_process_deps_reqs(
             hass, config, name, module.DEPENDENCIES)  # type: ignore
 
         if not dep_success:
-            raise HomeAssistantError("Could not setup all dependencies.")
+            raise HomeAssistantError("Could not set up all dependencies.")
 
     if not hass.config.skip_pip and hasattr(module, 'REQUIREMENTS'):
         req_success = await requirements.async_process_requirements(
@@ -248,3 +248,35 @@ async def async_process_deps_reqs(
             raise HomeAssistantError("Could not install all requirements.")
 
     processed.add(name)
+
+
+@core.callback
+def async_when_setup(
+        hass: core.HomeAssistant, component: str,
+        when_setup_cb: Callable[
+            [core.HomeAssistant, str], Awaitable[None]]) -> None:
+    """Call a method when a component is setup."""
+    async def when_setup() -> None:
+        """Call the callback."""
+        try:
+            await when_setup_cb(hass, component)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception('Error handling when_setup callback for %s',
+                              component)
+
+    # Running it in a new task so that it always runs after
+    if component in hass.config.components:
+        hass.async_create_task(when_setup())
+        return
+
+    unsub = None
+
+    async def loaded_event(event: core.Event) -> None:
+        """Call the callback."""
+        if event.data[ATTR_COMPONENT] != component:
+            return
+
+        unsub()  # type: ignore
+        await when_setup()
+
+    unsub = hass.bus.async_listen(EVENT_COMPONENT_LOADED, loaded_event)
