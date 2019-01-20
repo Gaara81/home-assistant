@@ -133,7 +133,6 @@ class DirecTvDevice(MediaPlayerDevice):
         self._is_client = device != '0'
         self._assumed_state = None
         self._available = False
-        self._first_error_timestamp = None
 
         if self._is_client:
             _LOGGER.debug("Created DirecTV client %s for device %s",
@@ -143,7 +142,7 @@ class DirecTvDevice(MediaPlayerDevice):
 
     def update(self):
         """Retrieve latest state."""
-        _LOGGER.debug("%s: Updating status", self.entity_id)
+        _LOGGER.debug("Updating status for %s", self._name)
         try:
             self._available = True
             self._is_standby = self.dtv.get_standby()
@@ -157,7 +156,6 @@ class DirecTvDevice(MediaPlayerDevice):
             else:
                 self._current = self.dtv.get_tuned()
                 if self._current['status']['code'] == 200:
-                    self._first_error_timestamp = None
                     self._is_recorded = self._current.get('uniqueId')\
                         is not None
                     self._paused = self._last_position == \
@@ -167,40 +165,14 @@ class DirecTvDevice(MediaPlayerDevice):
                     self._last_update = dt_util.utcnow() if not self._paused \
                         or self._last_update is None else self._last_update
                 else:
-                    # If an error is received then only set to unavailable if
-                    # this started at least 1 minute ago.
-                    log_message = "{}: Invalid status {} received".format(
-                        self.entity_id,
-                        self._current['status']['code']
-                    )
-                    if self._check_state_available():
-                        _LOGGER.debug(log_message)
-                    else:
-                        _LOGGER.error(log_message)
-
+                    self._available = False
         except requests.RequestException as ex:
-            _LOGGER.error("%s: Request error trying to update current status: "
-                          "%s", self.entity_id, ex)
-            self._check_state_available()
-
-        except Exception as ex:
-            _LOGGER.error("%s: Exception trying to update current status: %s",
-                          self.entity_id, ex)
+            _LOGGER.error("Request error trying to update current status for"
+                          " %s. %s", self._name, ex)
             self._available = False
-            if not self._first_error_timestamp:
-                self._first_error_timestamp = dt_util.utcnow()
+        except Exception:
+            self._available = False
             raise
-
-    def _check_state_available(self):
-        """Set to unavailable if issue been occurring over 1 minute."""
-        if not self._first_error_timestamp:
-            self._first_error_timestamp = dt_util.utcnow()
-        else:
-            tdelta = dt_util.utcnow() - self._first_error_timestamp
-            if tdelta.total_seconds() >= 60:
-                self._available = False
-
-        return self._available
 
     @property
     def device_state_attributes(self):

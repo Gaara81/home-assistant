@@ -6,7 +6,7 @@ from os import path
 import voluptuous as vol
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
-from homeassistant.const import ATTR_ENTITY_ID, ENTITY_MATCH_ALL
+from homeassistant.const import ATTR_ENTITY_ID
 import homeassistant.core as ha
 from homeassistant.exceptions import TemplateError, Unauthorized, UnknownUser
 from homeassistant.helpers import template
@@ -55,13 +55,9 @@ async def async_call_from_config(hass, config, blocking=False, variables=None,
                 variables)
             domain_service = cv.service(domain_service)
         except TemplateError as ex:
-            if blocking:
-                raise
             _LOGGER.error('Error rendering service name template: %s', ex)
             return
         except vol.Invalid:
-            if blocking:
-                raise
             _LOGGER.error('Template rendered invalid service: %s',
                           domain_service)
             return
@@ -201,13 +197,7 @@ async def entity_service_call(hass, platforms, func, call):
         entity_perms = None
 
     # Are we trying to target all entities
-    if ATTR_ENTITY_ID in call.data:
-        target_all_entities = call.data[ATTR_ENTITY_ID] == ENTITY_MATCH_ALL
-    else:
-        _LOGGER.warning(
-            'Not passing an entity ID to a service to target all entities is '
-            'deprecated. Use instead: entity_id: "%s"', ENTITY_MATCH_ALL)
-        target_all_entities = True
+    target_all_entities = ATTR_ENTITY_ID not in call.data
 
     if not target_all_entities:
         # A set of entities we're trying to target.

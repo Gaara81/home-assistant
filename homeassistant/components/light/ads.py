@@ -63,16 +63,15 @@ class AdsLight(Light):
             self._brightness = value
             self.schedule_update_ha_state()
 
-        self.hass.async_add_executor_job(
+        self.hass.async_add_job(
             self._ads_hub.add_device_notification,
             self.ads_var_enable, self._ads_hub.PLCTYPE_BOOL, update_on_state
         )
-        if self.ads_var_brightness is not None:
-            self.hass.async_add_executor_job(
-                self._ads_hub.add_device_notification,
-                self.ads_var_brightness, self._ads_hub.PLCTYPE_INT,
-                update_brightness
-            )
+        self.hass.async_add_job(
+            self._ads_hub.add_device_notification,
+            self.ads_var_brightness, self._ads_hub.PLCTYPE_INT,
+            update_brightness
+        )
 
     @property
     def name(self):
@@ -97,10 +96,8 @@ class AdsLight(Light):
     @property
     def supported_features(self):
         """Flag supported features."""
-        support = 0
         if self.ads_var_brightness is not None:
-            support = SUPPORT_BRIGHTNESS
-        return support
+            return SUPPORT_BRIGHTNESS
 
     def turn_on(self, **kwargs):
         """Turn the light on or set a specific dimmer value."""

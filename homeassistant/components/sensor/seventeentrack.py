@@ -21,12 +21,9 @@ REQUIREMENTS = ['py17track==2.1.1']
 _LOGGER = logging.getLogger(__name__)
 
 ATTR_DESTINATION_COUNTRY = 'destination_country'
-ATTR_FRIENDLY_NAME = 'friendly_name'
 ATTR_INFO_TEXT = 'info_text'
 ATTR_ORIGIN_COUNTRY = 'origin_country'
-ATTR_PACKAGES = 'packages'
 ATTR_PACKAGE_TYPE = 'package_type'
-ATTR_STATUS = 'status'
 ATTR_TRACKING_INFO_LANGUAGE = 'tracking_info_language'
 ATTR_TRACKING_NUMBER = 'tracking_number'
 
@@ -120,7 +117,7 @@ class SeventeenTrackSummarySensor(Entity):
     @property
     def name(self):
         """Return the name."""
-        return 'Seventeentrack Packages {0}'.format(self._status)
+        return '17track Packages {0}'.format(self._status)
 
     @property
     def state(self):
@@ -141,21 +138,6 @@ class SeventeenTrackSummarySensor(Entity):
     async def async_update(self):
         """Update the sensor."""
         await self._data.async_update()
-
-        package_data = []
-        for package in self._data.packages:
-            if package.status != self._status:
-                continue
-
-            package_data.append({
-                ATTR_FRIENDLY_NAME: package.friendly_name,
-                ATTR_INFO_TEXT: package.info_text,
-                ATTR_STATUS: package.status,
-                ATTR_TRACKING_NUMBER: package.tracking_number,
-            })
-
-        if package_data:
-            self._attrs[ATTR_PACKAGES] = package_data
 
         self._state = self._data.summary.get(self._status)
 
@@ -204,7 +186,7 @@ class SeventeenTrackPackageSensor(Entity):
         name = self._friendly_name
         if not name:
             name = self._tracking_number
-        return 'Seventeentrack Package: {0}'.format(name)
+        return '17track Package: {0}'.format(name)
 
     @property
     def state(self):

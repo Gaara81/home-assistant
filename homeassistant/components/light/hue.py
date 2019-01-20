@@ -298,8 +298,7 @@ class HueLight(Light):
     @property
     def device_info(self):
         """Return the device info."""
-        if self.light.type in ('LightGroup', 'Room',
-                               'Luminaire', 'LightSource'):
+        if self.light.type in ('LightGroup', 'Room'):
             return None
 
         return {

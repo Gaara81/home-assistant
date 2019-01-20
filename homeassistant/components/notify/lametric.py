@@ -85,7 +85,7 @@ class LaMetricNotificationService(BaseNotificationService):
                     _LOGGER.error("Sound ID %s unknown, ignoring",
                                   data["sound"])
             if "cycles" in data:
-                cycles = int(data['cycles'])
+                cycles = data['cycles']
             if "priority" in data:
                 if data['priority'] in AVAILABLE_PRIORITIES:
                     priority = data['priority']

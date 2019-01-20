@@ -15,7 +15,6 @@ from homeassistant.helpers import discovery
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_send,
     async_dispatcher_connect)
@@ -25,7 +24,7 @@ DOMAIN = 'volvooncall'
 
 DATA_KEY = DOMAIN
 
-REQUIREMENTS = ['volvooncall==0.8.7']
+REQUIREMENTS = ['volvooncall==0.7.11']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,15 +106,12 @@ CONFIG_SCHEMA = vol.Schema({
 
 async def async_setup(hass, config):
     """Set up the Volvo On Call component."""
-    session = async_get_clientsession(hass)
-
     from volvooncall import Connection
     connection = Connection(
-        session=session,
-        username=config[DOMAIN].get(CONF_USERNAME),
-        password=config[DOMAIN].get(CONF_PASSWORD),
-        service_url=config[DOMAIN].get(CONF_SERVICE_URL),
-        region=config[DOMAIN].get(CONF_REGION))
+        config[DOMAIN].get(CONF_USERNAME),
+        config[DOMAIN].get(CONF_PASSWORD),
+        config[DOMAIN].get(CONF_SERVICE_URL),
+        config[DOMAIN].get(CONF_REGION))
 
     interval = config[DOMAIN].get(CONF_UPDATE_INTERVAL)
 

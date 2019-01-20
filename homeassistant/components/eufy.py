@@ -15,7 +15,7 @@ from homeassistant.helpers import discovery
 import homeassistant.helpers.config_validation as cv
 
 
-REQUIREMENTS = ['lakeside==0.11']
+REQUIREMENTS = ['lakeside==0.10']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +43,6 @@ EUFY_DISPATCH = {
     'T1013': 'light',
     'T1201': 'switch',
     'T1202': 'switch',
-    'T1203': 'switch',
     'T1211': 'switch'
 }
 

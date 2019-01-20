@@ -136,7 +136,7 @@ class UERadioDevice(MediaPlayerDevice):
     @property
     def is_volume_muted(self):
         """Boolean if volume is currently muted."""
-        return self._volume <= 0
+        return True if self._volume <= 0 else False
 
     @property
     def volume_level(self):

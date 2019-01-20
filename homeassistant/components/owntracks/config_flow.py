@@ -9,7 +9,8 @@ CONF_SECRET = 'secret'
 def supports_encryption():
     """Test if we support encryption."""
     try:
-        import libnacl   # noqa pylint: disable=unused-import
+        # pylint: disable=unused-variable
+        import libnacl   # noqa
         return True
     except OSError:
         return False

@@ -12,14 +12,13 @@ import voluptuous as vol
 
 from homeassistant.components.notify import (
     BaseNotificationService, PLATFORM_SCHEMA, ATTR_DATA)
-from homeassistant.const import CONF_RESOURCE, CONF_VERIFY_SSL
+from homeassistant.const import CONF_RESOURCE
 import homeassistant.helpers.config_validation as cv
 
 ATTR_FILE_URL = 'file_url'
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_RESOURCE): cv.url,
-    vol.Optional(CONF_VERIFY_SSL, default=True): cv.boolean,
 })
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,18 +27,16 @@ _LOGGER = logging.getLogger(__name__)
 def get_service(hass, config, discovery_info=None):
     """Get the Synology Chat notification service."""
     resource = config.get(CONF_RESOURCE)
-    verify_ssl = config.get(CONF_VERIFY_SSL)
 
-    return SynologyChatNotificationService(resource, verify_ssl)
+    return SynologyChatNotificationService(resource)
 
 
 class SynologyChatNotificationService(BaseNotificationService):
     """Implementation of a notification service for Synology Chat."""
 
-    def __init__(self, resource, verify_ssl):
+    def __init__(self, resource):
         """Initialize the service."""
         self._resource = resource
-        self._verify_ssl = verify_ssl
 
     def send_message(self, message="", **kwargs):
         """Send a message to a user."""
@@ -55,8 +52,7 @@ class SynologyChatNotificationService(BaseNotificationService):
 
         to_send = 'payload={}'.format(json.dumps(data))
 
-        response = requests.post(self._resource, data=to_send, timeout=10,
-                                 verify=self._verify_ssl)
+        response = requests.post(self._resource, data=to_send, timeout=10)
 
         if response.status_code not in (200, 201):
             _LOGGER.exception(

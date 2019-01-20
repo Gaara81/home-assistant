@@ -28,16 +28,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the HomematicIP Cloud binary sensor from a config entry."""
     from homematicip.aio.device import (
         AsyncShutterContact, AsyncMotionDetectorIndoor, AsyncSmokeDetector,
-        AsyncWaterSensor, AsyncRotaryHandleSensor,
-        AsyncMotionDetectorPushButton)
+        AsyncWaterSensor, AsyncRotaryHandleSensor)
 
     home = hass.data[HMIPC_DOMAIN][config_entry.data[HMIPC_HAPID]].home
     devices = []
     for device in home.devices:
         if isinstance(device, (AsyncShutterContact, AsyncRotaryHandleSensor)):
             devices.append(HomematicipShutterContact(home, device))
-        elif isinstance(device, (AsyncMotionDetectorIndoor,
-                                 AsyncMotionDetectorPushButton)):
+        elif isinstance(device, AsyncMotionDetectorIndoor):
             devices.append(HomematicipMotionDetector(home, device))
         elif isinstance(device, AsyncSmokeDetector):
             devices.append(HomematicipSmokeDetector(home, device))

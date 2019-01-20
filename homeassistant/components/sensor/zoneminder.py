@@ -64,8 +64,7 @@ class ZMSensorMonitors(Entity):
     def __init__(self, monitor):
         """Initialize monitor sensor."""
         self._monitor = monitor
-        self._state = None
-        self._is_available = None
+        self._state = monitor.function.value
 
     @property
     def name(self):
@@ -77,11 +76,6 @@ class ZMSensorMonitors(Entity):
         """Return the state of the sensor."""
         return self._state
 
-    @property
-    def available(self):
-        """Return True if Monitor is available."""
-        return self._is_available
-
     def update(self):
         """Update the sensor."""
         state = self._monitor.function
@@ -89,7 +83,6 @@ class ZMSensorMonitors(Entity):
             self._state = None
         else:
             self._state = state.value
-        self._is_available = self._monitor.is_available
 
 
 class ZMSensorEvents(Entity):
@@ -130,7 +123,6 @@ class ZMSensorRunState(Entity):
     def __init__(self, client):
         """Initialize run state sensor."""
         self._state = None
-        self._is_available = None
         self._client = client
 
     @property
@@ -143,12 +135,6 @@ class ZMSensorRunState(Entity):
         """Return the state of the sensor."""
         return self._state
 
-    @property
-    def available(self):
-        """Return True if ZoneMinder is available."""
-        return self._is_available
-
     def update(self):
         """Update the sensor."""
         self._state = self._client.get_active_state()
-        self._is_available = self._client.is_available

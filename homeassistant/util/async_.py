@@ -28,7 +28,7 @@ except AttributeError:
         try:
             return loop.run_until_complete(main)
         finally:
-            asyncio.set_event_loop(None)
+            asyncio.set_event_loop(None)  # type: ignore # not a bug
             loop.close()
 
 

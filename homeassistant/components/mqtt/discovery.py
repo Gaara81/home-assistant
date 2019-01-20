@@ -41,10 +41,9 @@ CONFIG_ENTRY_COMPONENTS = [
 ]
 
 DEPRECATED_PLATFORM_TO_SCHEMA = {
-    'light': {
-        'mqtt_json': 'json',
-        'mqtt_template': 'template',
-    }
+    'mqtt': 'basic',
+    'mqtt_json': 'json',
+    'mqtt_template': 'template',
 }
 
 
@@ -68,7 +67,6 @@ ABBREVIATIONS = {
     'bri_scl': 'brightness_scale',
     'bri_stat_t': 'brightness_state_topic',
     'bri_val_tpl': 'brightness_value_template',
-    'clr_temp_cmd_tpl': 'color_temp_command_template',
     'clr_temp_cmd_t': 'color_temp_command_topic',
     'clr_temp_stat_t': 'color_temp_state_topic',
     'clr_temp_val_tpl': 'color_temp_value_template',
@@ -198,7 +196,7 @@ async def async_start(hass: HomeAssistantType, discovery_topic, hass_config,
         if TOPIC_BASE in payload:
             base = payload[TOPIC_BASE]
             for key, value in payload.items():
-                if isinstance(value, str) and value:
+                if isinstance(value, str):
                     if value[0] == TOPIC_BASE and key.endswith('_topic'):
                         payload[key] = "{}{}".format(base, value[1:])
                     if value[-1] == TOPIC_BASE and key.endswith('_topic'):
@@ -209,11 +207,10 @@ async def async_start(hass: HomeAssistantType, discovery_topic, hass_config,
         discovery_hash = (component, discovery_id)
 
         if payload:
-            if CONF_PLATFORM in payload and 'schema' not in payload:
+            if CONF_PLATFORM in payload:
                 platform = payload[CONF_PLATFORM]
-                if (component in DEPRECATED_PLATFORM_TO_SCHEMA and
-                        platform in DEPRECATED_PLATFORM_TO_SCHEMA[component]):
-                    schema = DEPRECATED_PLATFORM_TO_SCHEMA[component][platform]
+                if platform in DEPRECATED_PLATFORM_TO_SCHEMA:
+                    schema = DEPRECATED_PLATFORM_TO_SCHEMA[platform]
                     payload['schema'] = schema
                     _LOGGER.warning('"platform": "%s" is deprecated, '
                                     'replace with "schema":"%s"',

@@ -16,7 +16,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import discovery
 from homeassistant.util import Throttle
 
-REQUIREMENTS = ["mychevy==1.2.0"]
+REQUIREMENTS = ["mychevy==1.0.1"]
 
 DOMAIN = 'mychevy'
 UPDATE_TOPIC = DOMAIN
@@ -33,15 +33,10 @@ _LOGGER = logging.getLogger(__name__)
 MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=30)
 ERROR_SLEEP_TIME = timedelta(minutes=30)
 
-CONF_COUNTRY = 'country'
-DEFAULT_COUNTRY = 'us'
-
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
         vol.Required(CONF_USERNAME): cv.string,
         vol.Required(CONF_PASSWORD): cv.string,
-        vol.Optional(CONF_COUNTRY, default=DEFAULT_COUNTRY):
-            vol.All(cv.string, vol.In(['us', 'ca']))
     }),
 }, extra=vol.ALLOW_EXTRA)
 
@@ -49,12 +44,10 @@ CONFIG_SCHEMA = vol.Schema({
 class EVSensorConfig:
     """The EV sensor configuration."""
 
-    def __init__(self, name, attr, unit_of_measurement=None, icon=None,
-                 extra_attrs=None):
+    def __init__(self, name, attr, unit_of_measurement=None, icon=None):
         """Create new sensor configuration."""
         self.name = name
         self.attr = attr
-        self.extra_attrs = extra_attrs or []
         self.unit_of_measurement = unit_of_measurement
         self.icon = icon
 
@@ -77,8 +70,7 @@ def setup(hass, base_config):
 
     email = config.get(CONF_USERNAME)
     password = config.get(CONF_PASSWORD)
-    country = config.get(CONF_COUNTRY)
-    hass.data[DOMAIN] = MyChevyHub(mc.MyChevy(email, password, country), hass,
+    hass.data[DOMAIN] = MyChevyHub(mc.MyChevy(email, password), hass,
                                    base_config)
     hass.data[DOMAIN].start()
 

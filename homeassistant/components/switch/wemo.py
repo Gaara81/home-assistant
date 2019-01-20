@@ -35,7 +35,7 @@ WEMO_OFF = 0
 WEMO_STANDBY = 8
 
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
+def setup_platform(hass, config, add_entities_callback, discovery_info=None):
     """Set up discovered WeMo switches."""
     from pywemo import discovery
 
@@ -51,7 +51,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
             raise PlatformNotReady
 
         if device:
-            add_entities([WemoSwitch(device)])
+            add_entities_callback([WemoSwitch(device)])
 
 
 class WemoSwitch(SwitchDevice):
@@ -64,12 +64,10 @@ class WemoSwitch(SwitchDevice):
         self.maker_params = None
         self.coffeemaker_mode = None
         self._state = None
-        self._mode_string = None
         self._available = True
         self._update_lock = None
+        # look up model name once as it incurs network traffic
         self._model_name = self.wemo.model_name
-        self._name = self.wemo.name
-        self._serialnumber = self.wemo.serialnumber
 
     def _subscription_callback(self, _device, _type, _params):
         """Update the state by the Wemo device."""
@@ -88,14 +86,23 @@ class WemoSwitch(SwitchDevice):
         self.async_schedule_update_ha_state()
 
     @property
+    def should_poll(self):
+        """Device should poll.
+
+        Subscriptions push the state, however it won't detect if a device
+        is no longer available. Use polling to detect if a device is available.
+        """
+        return True
+
+    @property
     def unique_id(self):
         """Return the ID of this WeMo switch."""
-        return self._serialnumber
+        return self.wemo.serialnumber
 
     @property
     def name(self):
         """Return the name of the switch if any."""
-        return self._name
+        return self.wemo.name
 
     @property
     def device_state_attributes(self):
@@ -162,7 +169,7 @@ class WemoSwitch(SwitchDevice):
     def detail_state(self):
         """Return the state of the device."""
         if self.coffeemaker_mode is not None:
-            return self._mode_string
+            return self.wemo.mode_string
         if self.insight_params:
             standby_state = int(self.insight_params['state'])
             if standby_state == WEMO_ON:
@@ -235,7 +242,6 @@ class WemoSwitch(SwitchDevice):
         """Update the device state."""
         try:
             self._state = self.wemo.get_state(force_update)
-
             if self._model_name == 'Insight':
                 self.insight_params = self.wemo.insight_params
                 self.insight_params['standby_state'] = (
@@ -244,7 +250,6 @@ class WemoSwitch(SwitchDevice):
                 self.maker_params = self.wemo.maker_params
             elif self._model_name == 'CoffeeMaker':
                 self.coffeemaker_mode = self.wemo.mode
-                self._mode_string = self.wemo.mode_string
 
             if not self._available:
                 _LOGGER.info('Reconnected to %s', self.name)

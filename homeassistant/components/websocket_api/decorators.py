@@ -3,7 +3,6 @@ from functools import wraps
 import logging
 
 from homeassistant.core import callback
-from homeassistant.exceptions import Unauthorized
 
 from . import messages
 
@@ -31,19 +30,21 @@ def async_response(func):
     return schedule_handler
 
 
-def require_admin(func):
-    """Websocket decorator to require user to be an admin."""
+def require_owner(func):
+    """Websocket decorator to require user to be an owner."""
     @wraps(func)
-    def with_admin(hass, connection, msg):
-        """Check admin and call function."""
+    def with_owner(hass, connection, msg):
+        """Check owner and call function."""
         user = connection.user
 
-        if user is None or not user.is_admin:
-            raise Unauthorized()
+        if user is None or not user.is_owner:
+            connection.send_message(messages.error_message(
+                msg['id'], 'unauthorized', 'This command is for owners only.'))
+            return
 
         func(hass, connection, msg)
 
-    return with_admin
+    return with_owner
 
 
 def ws_require_user(

@@ -61,7 +61,8 @@ class MyStromView(HomeAssistantView):
                 '{}_{}'.format(button_id, button_action))
             self.add_entities([self.buttons[entity_id]])
         else:
-            new_state = self.buttons[entity_id].state == 'off'
+            new_state = True if self.buttons[entity_id].state == 'off' \
+                else False
             self.buttons[entity_id].async_on_update(new_state)
 
 

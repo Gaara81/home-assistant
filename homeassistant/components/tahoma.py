@@ -39,7 +39,6 @@ TAHOMA_TYPES = {
     'io:ExteriorVenetianBlindIOComponent': 'cover',
     'io:HorizontalAwningIOComponent': 'cover',
     'io:LightIOSystemSensor': 'sensor',
-    'io:OnOffIOComponent': 'switch',
     'io:OnOffLightIOComponent': 'switch',
     'io:RollerShutterGenericIOComponent': 'cover',
     'io:RollerShutterUnoIOComponent': 'cover',

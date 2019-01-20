@@ -18,13 +18,12 @@ from homeassistant.components.climate import (
     SUPPORT_SWING_MODE, SUPPORT_FAN_MODE, SUPPORT_AWAY_MODE, SUPPORT_HOLD_MODE,
     SUPPORT_AUX_HEAT, DEFAULT_MIN_TEMP, DEFAULT_MAX_TEMP)
 from homeassistant.const import (
-    ATTR_TEMPERATURE, CONF_DEVICE, CONF_NAME, CONF_VALUE_TEMPLATE, STATE_ON,
-    STATE_OFF)
+    STATE_ON, STATE_OFF, ATTR_TEMPERATURE, CONF_NAME, CONF_VALUE_TEMPLATE)
 from homeassistant.components.mqtt import (
     ATTR_DISCOVERY_HASH, CONF_AVAILABILITY_TOPIC, CONF_QOS, CONF_RETAIN,
     CONF_PAYLOAD_AVAILABLE, CONF_PAYLOAD_NOT_AVAILABLE,
     MQTT_BASE_PLATFORM_SCHEMA, MqttAvailability, MqttDiscoveryUpdate,
-    MqttEntityDeviceInfo, subscription)
+    subscription)
 from homeassistant.components.mqtt.discovery import MQTT_DISCOVERY_NEW
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -78,8 +77,6 @@ CONF_SEND_IF_OFF = 'send_if_off'
 CONF_MIN_TEMP = 'min_temp'
 CONF_MAX_TEMP = 'max_temp'
 CONF_TEMP_STEP = 'temp_step'
-
-CONF_UNIQUE_ID = 'unique_id'
 
 TEMPLATE_KEYS = (
     CONF_POWER_STATE_TEMPLATE,
@@ -142,9 +139,8 @@ PLATFORM_SCHEMA = SCHEMA_BASE.extend({
 
     vol.Optional(CONF_MIN_TEMP, default=DEFAULT_MIN_TEMP): vol.Coerce(float),
     vol.Optional(CONF_MAX_TEMP, default=DEFAULT_MAX_TEMP): vol.Coerce(float),
-    vol.Optional(CONF_TEMP_STEP, default=1.0): vol.Coerce(float),
-    vol.Optional(CONF_UNIQUE_ID): cv.string,
-    vol.Optional(CONF_DEVICE): mqtt.MQTT_ENTITY_DEVICE_INFO_SCHEMA,
+    vol.Optional(CONF_TEMP_STEP, default=1.0): vol.Coerce(float)
+
 }).extend(mqtt.MQTT_AVAILABILITY_SCHEMA.schema)
 
 
@@ -178,14 +174,12 @@ async def _async_setup_entity(hass, config, async_add_entities,
         )])
 
 
-class MqttClimate(MqttAvailability, MqttDiscoveryUpdate, MqttEntityDeviceInfo,
-                  ClimateDevice):
+class MqttClimate(MqttAvailability, MqttDiscoveryUpdate, ClimateDevice):
     """Representation of an MQTT climate device."""
 
     def __init__(self, hass, config, discovery_hash):
         """Initialize the climate device."""
         self._config = config
-        self._unique_id = config.get(CONF_UNIQUE_ID)
         self._sub_state = None
 
         self.hass = hass
@@ -207,13 +201,11 @@ class MqttClimate(MqttAvailability, MqttDiscoveryUpdate, MqttEntityDeviceInfo,
         payload_available = config.get(CONF_PAYLOAD_AVAILABLE)
         payload_not_available = config.get(CONF_PAYLOAD_NOT_AVAILABLE)
         qos = config.get(CONF_QOS)
-        device_config = config.get(CONF_DEVICE)
 
         MqttAvailability.__init__(self, availability_topic, qos,
                                   payload_available, payload_not_available)
         MqttDiscoveryUpdate.__init__(self, discovery_hash,
                                      self.discovery_update)
-        MqttEntityDeviceInfo.__init__(self, device_config)
 
     async def async_added_to_hass(self):
         """Handle being added to home assistant."""
@@ -461,8 +453,7 @@ class MqttClimate(MqttAvailability, MqttDiscoveryUpdate, MqttEntityDeviceInfo,
 
     async def async_will_remove_from_hass(self):
         """Unsubscribe when removed."""
-        self._sub_state = await subscription.async_unsubscribe_topics(
-            self.hass, self._sub_state)
+        await subscription.async_unsubscribe_topics(self.hass, self._sub_state)
         await MqttAvailability.async_will_remove_from_hass(self)
 
     @property
@@ -474,11 +465,6 @@ class MqttClimate(MqttAvailability, MqttDiscoveryUpdate, MqttEntityDeviceInfo,
     def name(self):
         """Return the name of the climate device."""
         return self._config.get(CONF_NAME)
-
-    @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return self._unique_id
 
     @property
     def temperature_unit(self):

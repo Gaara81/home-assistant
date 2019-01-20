@@ -94,11 +94,11 @@ PLATFORM_SCHEMA = vol.Schema({
 })
 
 SERVICE_SCHEMA = vol.Schema({
-    vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids,
+    vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
 })
 
 TRIGGER_SERVICE_SCHEMA = vol.Schema({
-    vol.Required(ATTR_ENTITY_ID): cv.comp_entity_ids,
+    vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
     vol.Optional(ATTR_VARIABLES, default={}): dict,
 })
 
@@ -375,15 +375,7 @@ def _async_get_action(hass, config, name):
     async def action(entity_id, variables, context):
         """Execute an action."""
         _LOGGER.info('Executing %s', name)
-        hass.components.logbook.async_log_entry(
-            name, 'has been triggered', DOMAIN, entity_id)
-
-        try:
-            await script_obj.async_run(variables, context)
-        except Exception as err:  # pylint: disable=broad-except
-            script_obj.async_log_exception(
-                _LOGGER,
-                'Error while executing automation {}'.format(entity_id), err)
+        await script_obj.async_run(variables, context)
 
     return action
 

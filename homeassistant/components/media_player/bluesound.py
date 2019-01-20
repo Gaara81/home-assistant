@@ -779,7 +779,7 @@ class BluesoundPlayer(MediaPlayerDevice):
     @property
     def shuffle(self):
         """Return true if shuffle is active."""
-        return self._status.get('shuffle', '0') == '1'
+        return True if self._status.get('shuffle', '0') == '1' else False
 
     async def async_join(self, master):
         """Join the player to a group."""

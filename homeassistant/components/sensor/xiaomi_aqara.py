@@ -107,8 +107,5 @@ class XiaomiSensor(XiaomiDevice):
             return False
         if self._data_key == 'pressure' and value == 0:
             return False
-        if self._data_key in ['illumination', 'lux']:
-            self._state = round(value)
-        else:
-            self._state = round(value, 1)
+        self._state = round(value, 1)
         return True

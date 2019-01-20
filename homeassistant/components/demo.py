@@ -15,7 +15,6 @@ DEPENDENCIES = ['conversation', 'introduction', 'zone']
 DOMAIN = 'demo'
 
 COMPONENTS_WITH_DEMO_PLATFORM = [
-    'air_quality',
     'alarm_control_panel',
     'binary_sensor',
     'calendar',

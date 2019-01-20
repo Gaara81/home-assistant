@@ -31,12 +31,7 @@ SUPPORT_CODECS = [
 
 SUPPORT_VOICES = [
     'jane', 'oksana', 'alyss', 'omazh',
-    'zahar', 'ermil', 'levitan', 'ermilov',
-    'silaerkan', 'kolya', 'kostya', 'nastya',
-    'sasha', 'nick', 'erkanyavas', 'zhenya',
-    'tanya', 'anton_samokhvalov', 'tatyana_abramova',
-    'voicesearch', 'ermil_with_tuning', 'robot',
-    'dude', 'zombie', 'smoky'
+    'zahar', 'ermil'
 ]
 
 SUPPORTED_EMOTION = [
